@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جدول روی تصویر</title>
+    <style>
+        body {
+            font-family: Arial, Tahoma, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        label {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        input {
+            width: 300px;
+            padding: 5px;
+            margin-bottom: 10px;
+            text-align: right;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        canvas {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+<label for="subjectInput">موضوع</label>
+<input name="subjectInput" id="subjectInput" placeholder="موضوع خود را وارد کنید...">
+<label for="presenterInput">ارائه‌دهنده</label>
+<input name="presenterInput" id="presenterInput" placeholder="ارائه‌دهنده را وارد کنید...">
+<label for="dateInput">تاریخ</label>
+<input name="dateInput" id="dateInput" placeholder="تاریخ را وارد کنید...">
+<label for="timeInput">زمان</label>
+<input name="timeInput" id="timeInput" placeholder="زمان را وارد کنید...">
+<label for="typeInput">نوع</label>
+<input name="typeInput" id="typeInput" placeholder="نوع را وارد کنید...">
+<label for="addressInput">آدرس</label>
+<input name="addressInput" id="addressInput" placeholder="آدرس را وارد کنید...">
+<label for="personsInput">افراد</label>
+<input name="personsInput" id="personsInput" placeholder="افراد را وارد کنید...">
+<button onclick="generateImage()">تولید تصویر</button>
+<canvas id="canvas" style="display: none;"></canvas>
+
+<script>
+    async function generateImage() {
+        const inputs = [
+            { label: 'موضوع', value: document.getElementById('subjectInput').value || 'موضوع نمونه' },
+            { label: 'ارائه‌دهنده', value: document.getElementById('presenterInput').value || 'علی محمدی' },
+            { label: 'تاریخ', value: document.getElementById('dateInput').value || '1404-02-02' },
+            { label: 'زمان', value: document.getElementById('timeInput').value || '10:00 صبح' },
+            { label: 'نوع', value: document.getElementById('typeInput').value || 'جلسه' },
+            { label: 'آدرس', value: document.getElementById('addressInput').value || 'خیابان اصلی' },
+            { label: 'افراد', value: document.getElementById('personsInput').value || 'اعضای تیم' }
+        ];
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Load background image
+        const img = new Image();
+        try {
+            img.src = 'bg.jpg'; // Local image in the same directory
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = () => reject(new Error('Failed to load image'));
+            });
+        } catch (error) {
+            // Fallback to a solid color if image fails to load
+            console.error('Image load failed, using fallback background');
+            canvas.width = 800;
+            canvas.height = 600;
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Set canvas dimensions to match image or default size
+        canvas.width = img.width || 800;
+        canvas.height = img.height || 600;
+
+        // Draw background image if loaded
+        if (img.width) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        }
+
+        // Table settings
+        const fontSize = 20;
+        const lineHeight = fontSize + 20;
+        const cellPadding = 10;
+        const maxColWidth = (canvas.width - 20) / 2; // Max width per column (with margins)
+        ctx.font = `${fontSize}px IRANSans`;
+        ctx.textBaseline = 'middle';
+
+        // Function to wrap text
+        function wrapText(text, maxWidth) {
+            const words = text.split(' ');
+            let line = '';
+            const lines = [];
+            for (let word of words) {
+                const testLine = line + word + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && line !== '') {
+                    lines.push(line.trim());
+                    line = word + ' ';
+                } else {
+                    line = testLine;
+                }
+            }
+            lines.push(line.trim());
+            return lines;
+        }
+
+        // Calculate column widths and wrapped text
+        const wrappedInputs = inputs.map(row => ({
+            label: wrapText(row.label, maxColWidth),
+            value: wrapText(row.value, maxColWidth)
+        }));
+
+        // Calculate column widths based on wrapped text
+        const col1Width = Math.min(
+            Math.max(...wrappedInputs.map(row =>
+                Math.max(...row.value.map(line => ctx.measureText(line).width))
+            )) + 2 * cellPadding,
+            maxColWidth
+        );
+        const col2Width = Math.min(
+            Math.max(...wrappedInputs.map(row =>
+                Math.max(...row.label.map(line => ctx.measureText(line).width))
+            )) + 2 * cellPadding,
+            maxColWidth
+        );
+        const tableWidth = col1Width + col2Width;
+
+        // Calculate table height based on max lines per row
+        const rowHeights = wrappedInputs.map(row =>
+            Math.max(row.label.length, row.value.length) * lineHeight
+        );
+        const tableHeight = rowHeights.reduce((sum, h) => sum + h, 0) + 5 * cellPadding;
+
+        // Draw table background (semi-transparent)
+        const tableX = (canvas.width - tableWidth) / 2;
+        const tableY = (canvas.height - tableHeight) / 2;
+        ctx.fillStyle = 'rgba(5, 5, 45, 0.80)';
+        ctx.fillRect(tableX, tableY, tableWidth, tableHeight);
+
+        // Draw table content
+        let currentY = tableY + cellPadding;
+        wrappedInputs.forEach((row, index) => {
+            const rowHeight = rowHeights[index];
+            const maxLines = Math.max(row.label.length, row.value.length);
+
+            // Draw value (first column, right-aligned)
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1;
+            ctx.textAlign = 'right';
+            row.value.forEach((line, i) => {
+                const y = currentY + (i + 0.5) * lineHeight;
+                ctx.strokeText(line, tableX + col1Width - cellPadding, y);
+                ctx.fillText(line, tableX + col1Width - cellPadding, y);
+            });
+
+            // Draw label (second column, right-aligned)
+            row.label.forEach((line, i) => {
+                const y = currentY + (i + 0.5) * lineHeight;
+                ctx.strokeText(line, tableX + col1Width + col2Width - cellPadding, y);
+                ctx.fillText(line, tableX + col1Width + col2Width - cellPadding, y);
+            });
+
+            currentY += rowHeight;
+        });
+
+        // Show canvas
+        canvas.style.display = 'block';
+
+        // Create download link
+        const link = document.createElement('a');
+        link.download = 'text-on-image.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+</script>
+</body>
+</html>
