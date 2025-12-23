@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جدول روی تصویر</title>
+    <style>
+        body {
+            font-family: Arial, Tahoma, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        label {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        input {
+            width: 300px;
+            padding: 5px;
+            margin-bottom: 10px;
+            text-align: right;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        canvas {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+<label for="customerInput">مشتری</label>
+<input name="customerInput" id="customerInput" placeholder="نام مشتری خود را وارد کنید...">
+<label for="subjectInput">موضوع</label>
+<input name="subjectInput" id="subjectInput" placeholder="موضوع خود را وارد کنید...">
+<label for="presenterInput">ارائه‌دهنده</label>
+<input name="presenterInput" id="presenterInput" placeholder="ارائه‌دهنده را وارد کنید...">
+<label for="dateInput">تاریخ</label>
+<input name="dateInput" id="dateInput" placeholder="تاریخ را وارد کنید...">
+<label for="timeInput">زمان</label>
+<input name="timeInput" id="timeInput" placeholder="زمان را وارد کنید...">
+<label for="typeInput">نوع جلسه</label>
+<input name="typeInput" id="typeInput" placeholder="نوع جلسه را وارد کنید...">
+<label for="addressInput">آدرس</label>
+<input name="addressInput" id="addressInput" placeholder="آدرس را وارد کنید...">
+<label for="personsInput">حاضرین در جلسه</label>
+<input name="personsInput" id="personsInput" placeholder="افراد را وارد کنید...">
+<button onclick="generateImage()">تولید تصویر</button>
+<canvas id="canvas" style="display: none;"></canvas>
+
+<script>
+    async function generateImage() {
+        let customerTitle = document.getElementById('customerInput').value || 'مشتری';
+
+        const inputs = [
+            { label: 'موضوع', value: document.getElementById('subjectInput').value || 'موضوع نمونه' },
+            { label: 'ارائه‌دهنده', value: document.getElementById('presenterInput').value || 'علی محمدی' },
+            { label: 'تاریخ', value: document.getElementById('dateInput').value || '1404-02-02' },
+            { label: 'زمان', value: document.getElementById('timeInput').value || '10:00 صبح' },
+            { label: 'نوع جلسه', value: document.getElementById('typeInput').value || 'نوع جلسه' },
+            { label: 'آدرس', value: document.getElementById('addressInput').value || 'خیابان اصلی' },
+            { label: 'حاضرین در جلسه', value: document.getElementById('personsInput').value || 'حاضرین در جلسه' }
+        ];
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Load background image
+        const img = new Image();
+        try {
+            img.src = 'bg.jpg'; // Local image in the same directory
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = () => reject(new Error('Failed to load image'));
+            });
+        } catch (error) {
+            // Fallback to a solid color if image fails to load
+            console.error('Image load failed, using fallback background');
+            canvas.width = 900;
+            canvas.height = 680;
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        canvas.width = img.width || 900;
+        canvas.height = img.height || 680;
+
+        if (img.width) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        }
+
+        // Table settings
+        const fontSize = 28;
+        const lineHeight = fontSize + 20;
+        const cellPadding = 10;
+        const tableWidth = canvas.width * 0.9;
+        const maxColWidth = tableWidth / 2;
+        ctx.font = `${fontSize}px "B Nazanin"`;
+        ctx.textBaseline = 'middle';
+
+        // Function to wrap text
+        function wrapText(text, maxWidth) {
+            const words = text.split(' ');
+            let line = '';
+            const lines = [];
+            for (let word of words) {
+                const testLine = line + word + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > 600 && line !== '') {
+                    lines.push(line.trim());
+                    line = word + ' ';
+                } else {
+                    line = testLine;
+                }
+            }
+            lines.push(line.trim());
+            return lines;
+        }
+
+        // Title row
+        const title = `اطلاعات برگزاری جلسه با ${customerTitle}`;
+        const titleLines = wrapText(title, tableWidth - 2 * cellPadding);
+
+        // Calculate column widths and wrapped text
+        const wrappedInputs = inputs.map(row => ({
+            label: wrapText(row.label, maxColWidth - 2 * cellPadding),
+            value: wrapText(row.value, tableWidth - maxColWidth - 2 * cellPadding) // col2 uses remaining width
+        }));
+
+        // Calculate column widths based on wrapped text
+        const col1Width = Math.min(
+            Math.max(...wrappedInputs.map(row =>
+                Math.max(...row.label.map(line => ctx.measureText(line).width))
+            )) + 2 * cellPadding,
+            maxColWidth
+        );
+        const col2Width = Math.min(
+            Math.max(...wrappedInputs.map(row =>
+                Math.max(...row.value.map(line => ctx.measureText(line).width))
+            )) + 2 * cellPadding,
+            tableWidth - col1Width
+        );
+
+        // Calculate row heights for content
+        const contentRowHeights = wrappedInputs.map(row =>
+            Math.max(row.label.length, row.value.length) * lineHeight
+        );
+        const titleRowHeight = titleLines.length * lineHeight;
+
+        // Calculate total content height
+        const totalContentHeight = titleRowHeight + contentRowHeights.reduce((sum, h) => sum + h, 0) + 5 * cellPadding;
+
+        // Enforce table height to be exactly 90% of image height
+        const tableHeight = canvas.height * 0.9;
+        const scaleFactor = totalContentHeight > tableHeight ? tableHeight / totalContentHeight : 1;
+
+        // Scale row heights to fit within tableHeight
+        const rowHeights = [
+            titleRowHeight * scaleFactor,
+            ...contentRowHeights.map(h => h * scaleFactor)
+        ];
+
+        // Draw table background (semi-transparent)
+        const tableX = (canvas.width - tableWidth) / 2;
+        const tableY = (canvas.height - tableHeight) / 2;
+        ctx.fillStyle = 'rgba(5, 5, 45, 0.80)';
+        ctx.fillRect(tableX, tableY, tableWidth, tableHeight);
+
+        // Draw table content
+        let currentY = tableY + cellPadding;
+
+        // Draw title row (centered)
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 1;
+        ctx.textAlign = 'center';
+        titleLines.forEach((line, i) => {
+            const y = currentY + (i + 0.5) * (rowHeights[0] / titleLines.length);
+            ctx.strokeText(line, tableX + tableWidth / 2, y);
+            ctx.fillText(line, tableX + tableWidth / 2, y);
+        });
+        currentY += rowHeights[0];
+
+        // Draw data rows
+        wrappedInputs.forEach((row, index) => {
+            const rowHeight = rowHeights[index + 1];
+            const maxLines = Math.max(row.label.length, row.value.length);
+
+            // Draw label (first column, right-aligned, starting from right edge)
+            ctx.textAlign = 'right';
+            row.label.forEach((line, i) => {
+                const y = currentY + (i + 0.5) * (rowHeight / maxLines);
+                ctx.strokeText(line, tableX + tableWidth - cellPadding - 25 , y);
+                ctx.fillText(line, tableX + tableWidth - cellPadding - 25 , y);
+            });
+
+            // Draw value (second column, right-aligned, to the left of first column)
+            row.value.forEach((line, i) => {
+                const y = currentY + (i + 0.5) * (rowHeight / maxLines);
+                ctx.strokeText(line,  tableWidth - col1Width - cellPadding, y);
+                ctx.fillText(line, tableWidth - col1Width - cellPadding, y);
+            });
+
+            currentY += rowHeight;
+        });
+
+        // Show canvas
+        canvas.style.display = 'block';
+
+        // Create download link
+        const link = document.createElement('a');
+        link.download = 'text-on-image.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+</script>
+</body>
+</html>
