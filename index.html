@@ -12,16 +12,8 @@
             align-items: center;
             padding: 20px;
         }
-        label {
-            margin-top: 10px;
-            font-weight: bold;
-        }
-        input {
-            width: 300px;
-            padding: 5px;
-            margin-bottom: 10px;
-            text-align: right;
-        }
+        label { margin-top: 10px; font-weight: bold; }
+        input { width: 300px; padding: 5px; margin-bottom: 10px; text-align: right; }
         button {
             padding: 10px 20px;
             background-color: #4CAF50;
@@ -30,38 +22,143 @@
             cursor: pointer;
             margin-top: 10px;
         }
-        button:hover {
-            background-color: #45a049;
+        button:hover { background-color: #45a049; }
+        #setupBox {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            background: #fff3cd;
+            border: 1px solid #ffe08a;
+            padding: 10px 20px;
+            margin-bottom: 15px;
         }
-        canvas {
-            margin-top: 20px;
-            border: 1px solid #ccc;
-        }
+        #resetLink { font-size: 12px; color: #888; cursor: pointer; margin-top: 8px; display: none; }
+        canvas { margin-top: 20px; border: 1px solid #ccc; max-width: 100%; height: auto; }
     </style>
 </head>
 <body>
+
+<div id="setupBox">
+    <label for="bgInput">فقط یک بار: فایل bg.jpg را انتخاب کنید</label>
+    <input type="file" id="bgInput" accept="image/*">
+</div>
+
 <label for="customerInput">مشتری</label>
-<input name="customerInput" id="customerInput" placeholder="نام مشتری خود را وارد کنید...">
+<input id="customerInput" placeholder="نام مشتری خود را وارد کنید...">
 <label for="subjectInput">موضوع</label>
-<input name="subjectInput" id="subjectInput" placeholder="موضوع خود را وارد کنید...">
+<input id="subjectInput" placeholder="موضوع خود را وارد کنید...">
 <label for="presenterInput">ارائه‌دهنده</label>
-<input name="presenterInput" id="presenterInput" placeholder="ارائه‌دهنده را وارد کنید...">
+<input id="presenterInput" placeholder="ارائه‌دهنده را وارد کنید...">
 <label for="dateInput">تاریخ</label>
-<input name="dateInput" id="dateInput" placeholder="تاریخ را وارد کنید...">
+<input id="dateInput" placeholder="تاریخ را وارد کنید...">
 <label for="timeInput">زمان</label>
-<input name="timeInput" id="timeInput" placeholder="زمان را وارد کنید...">
+<input id="timeInput" placeholder="زمان را وارد کنید...">
 <label for="typeInput">نوع جلسه</label>
-<input name="typeInput" id="typeInput" placeholder="نوع جلسه را وارد کنید...">
+<input id="typeInput" placeholder="نوع جلسه را وارد کنید...">
 <label for="addressInput">آدرس</label>
-<input name="addressInput" id="addressInput" placeholder="آدرس را وارد کنید...">
+<input id="addressInput" placeholder="آدرس را وارد کنید...">
 <label for="personsInput">حاضرین در جلسه</label>
-<input name="personsInput" id="personsInput" placeholder="افراد را وارد کنید...">
-<button onclick="generateImage()">تولید تصویر</button>
+<input id="personsInput" placeholder="افراد را وارد کنید...">
+
+<button onclick="generateImage()">تولید و دانلود تصویر</button>
+<span id="resetLink" onclick="resetBg()">تغییر تصویر پس‌زمینه</span>
 <canvas id="canvas" style="display: none;"></canvas>
 
 <script>
+    const FONT_FAMILY = '"B Nazanin", Vazirmatn, Tahoma, Arial, sans-serif';
+    let bgBlob = null; 
+
+    function openDB() {
+        return new Promise((resolve, reject) => {
+            const r = indexedDB.open('meetingImageDB', 1);
+            r.onupgradeneeded = () => r.result.createObjectStore('store');
+            r.onsuccess = () => resolve(r.result);
+            r.onerror = () => reject(r.error);
+        });
+    }
+    async function saveBg(blob) {
+        try {
+            const db = await openDB();
+            await new Promise((resolve, reject) => {
+                const t = db.transaction('store', 'readwrite');
+                t.objectStore('store').put(blob, 'bg');
+                t.oncomplete = resolve;
+                t.onerror = () => reject(t.error);
+            });
+        } catch (e) { console.warn('ذخیره‌سازی ممکن نشد', e); }
+    }
+    async function readBg() {
+        try {
+            const db = await openDB();
+            return await new Promise((resolve, reject) => {
+                const t = db.transaction('store', 'readonly');
+                const q = t.objectStore('store').get('bg');
+                q.onsuccess = () => resolve(q.result || null);
+                q.onerror = () => reject(q.error);
+            });
+        } catch (e) { return null; }
+    }
+    async function clearBg() {
+        try {
+            const db = await openDB();
+            db.transaction('store', 'readwrite').objectStore('store').delete('bg');
+        } catch (e) {}
+    }
+
+    function updateUI() {
+        document.getElementById('setupBox').style.display = bgBlob ? 'none' : 'flex';
+        document.getElementById('resetLink').style.display = bgBlob ? 'inline' : 'none';
+    }
+
+    document.getElementById('bgInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        bgBlob = file;
+        await saveBg(file);
+        updateUI();
+    });
+
+    async function resetBg() {
+        bgBlob = null;
+        await clearBg();
+        document.getElementById('bgInput').value = '';
+        updateUI();
+    }
+
+    (async () => {
+        bgBlob = await readBg();
+        updateUI();
+    })();
+
+    function loadBackground() {
+        return new Promise((resolve) => {
+            if (!bgBlob) return resolve(null);
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = URL.createObjectURL(bgBlob);
+        });
+    }
+
+    function wrapText(ctx, text, maxWidth) {
+        const words = String(text).split(' ');
+        const lines = [];
+        let line = '';
+        for (const word of words) {
+            const test = line ? line + ' ' + word : word;
+            if (ctx.measureText(test).width > maxWidth && line) {
+                lines.push(line);
+                line = word;
+            } else {
+                line = test;
+            }
+        }
+        if (line) lines.push(line);
+        return lines.length ? lines : [''];
+    }
+
     async function generateImage() {
-        let customerTitle = document.getElementById('customerInput').value || 'مشتری';
+        const customerTitle = document.getElementById('customerInput').value || 'مشتری';
 
         const inputs = [
             { label: 'موضوع', value: document.getElementById('subjectInput').value || 'موضوع نمونه' },
@@ -76,153 +173,106 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        // Load background image
-        const img = new Image();
-        try {
-            img.src = 'bg.jpg'; // Local image in the same directory
-            await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = () => reject(new Error('Failed to load image'));
-            });
-        } catch (error) {
-            // Fallback to a solid color if image fails to load
-            console.error('Image load failed, using fallback background');
-            canvas.width = 900;
-            canvas.height = 680;
+        const img = await loadBackground();
+        canvas.width = img ? img.naturalWidth : 900;
+        canvas.height = img ? img.naturalHeight : 680;
+
+        if (img) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        } else {
             ctx.fillStyle = '#f0f0f0';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
-        canvas.width = img.width || 900;
-        canvas.height = img.height || 680;
-
-        if (img.width) {
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        }
-
-        // Table settings
-        const fontSize = 28;
-        const lineHeight = fontSize + 20;
-        const cellPadding = 10;
+        const cellPadding = 20;
+        const gap = 20;
         const tableWidth = canvas.width * 0.9;
-        const maxColWidth = tableWidth / 2;
-        ctx.font = `${fontSize}px "B Nazanin"`;
-        ctx.textBaseline = 'middle';
-
-        // Function to wrap text
-        function wrapText(text, maxWidth) {
-            const words = text.split(' ');
-            let line = '';
-            const lines = [];
-            for (let word of words) {
-                const testLine = line + word + ' ';
-                const metrics = ctx.measureText(testLine);
-                if (metrics.width > 600 && line !== '') {
-                    lines.push(line.trim());
-                    line = word + ' ';
-                } else {
-                    line = testLine;
-                }
-            }
-            lines.push(line.trim());
-            return lines;
-        }
-
-        // Title row
-        const title = `اطلاعات برگزاری جلسه با ${customerTitle}`;
-        const titleLines = wrapText(title, tableWidth - 2 * cellPadding);
-
-        // Calculate column widths and wrapped text
-        const wrappedInputs = inputs.map(row => ({
-            label: wrapText(row.label, maxColWidth - 2 * cellPadding),
-            value: wrapText(row.value, tableWidth - maxColWidth - 2 * cellPadding) // col2 uses remaining width
-        }));
-
-        // Calculate column widths based on wrapped text
-        const col1Width = Math.min(
-            Math.max(...wrappedInputs.map(row =>
-                Math.max(...row.label.map(line => ctx.measureText(line).width))
-            )) + 2 * cellPadding,
-            maxColWidth
-        );
-        const col2Width = Math.min(
-            Math.max(...wrappedInputs.map(row =>
-                Math.max(...row.value.map(line => ctx.measureText(line).width))
-            )) + 2 * cellPadding,
-            tableWidth - col1Width
-        );
-
-        // Calculate row heights for content
-        const contentRowHeights = wrappedInputs.map(row =>
-            Math.max(row.label.length, row.value.length) * lineHeight
-        );
-        const titleRowHeight = titleLines.length * lineHeight;
-
-        // Calculate total content height
-        const totalContentHeight = titleRowHeight + contentRowHeights.reduce((sum, h) => sum + h, 0) + 5 * cellPadding;
-
-        // Enforce table height to be exactly 90% of image height
         const tableHeight = canvas.height * 0.9;
-        const scaleFactor = totalContentHeight > tableHeight ? tableHeight / totalContentHeight : 1;
-
-        // Scale row heights to fit within tableHeight
-        const rowHeights = [
-            titleRowHeight * scaleFactor,
-            ...contentRowHeights.map(h => h * scaleFactor)
-        ];
-
-        // Draw table background (semi-transparent)
         const tableX = (canvas.width - tableWidth) / 2;
         const tableY = (canvas.height - tableHeight) / 2;
+
+        ctx.textBaseline = 'middle';
+        ctx.direction = 'rtl';
+
+        const title = `اطلاعات برگزاری جلسه با ${customerTitle}`;
+
+        function layout(fontSize) {
+            ctx.font = `${fontSize}px ${FONT_FAMILY}`;
+            const lineHeight = fontSize * 1.6;
+            const rowGap = fontSize * 0.4;
+
+            const titleLines = wrapText(ctx, title, tableWidth - 2 * cellPadding);
+            const labelsWrapped = inputs.map(r => wrapText(ctx, r.label, tableWidth * 0.35));
+            const col1Width = Math.max(...labelsWrapped.flat().map(l => ctx.measureText(l).width));
+            const valueMax = tableWidth - 2 * cellPadding - col1Width - gap;
+            const valuesWrapped = inputs.map(r => wrapText(ctx, r.value, valueMax));
+
+            const rowHeights = inputs.map((_, i) =>
+                Math.max(labelsWrapped[i].length, valuesWrapped[i].length) * lineHeight + rowGap
+            );
+            const titleHeight = titleLines.length * lineHeight + rowGap * 2;
+            const total = titleHeight + rowHeights.reduce((a, b) => a + b, 0);
+
+            return { fontSize, lineHeight, titleLines, titleHeight, labelsWrapped,
+                     valuesWrapped, rowHeights, col1Width, total };
+        }
+
+        let L = layout(28);
+        for (let fs = 28; fs >= 12; fs--) {
+            L = layout(fs);
+            if (L.total <= tableHeight - 2 * cellPadding) break;
+        }
+
         ctx.fillStyle = 'rgba(5, 5, 45, 0.80)';
         ctx.fillRect(tableX, tableY, tableWidth, tableHeight);
 
-        // Draw table content
-        let currentY = tableY + cellPadding;
-
-        // Draw title row (centered)
+        ctx.font = `${L.fontSize}px ${FONT_FAMILY}`;
         ctx.fillStyle = 'white';
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 1;
+
+        let y = tableY + (tableHeight - L.total) / 2;
+
         ctx.textAlign = 'center';
-        titleLines.forEach((line, i) => {
-            const y = currentY + (i + 0.5) * (rowHeights[0] / titleLines.length);
-            ctx.strokeText(line, tableX + tableWidth / 2, y);
-            ctx.fillText(line, tableX + tableWidth / 2, y);
+        L.titleLines.forEach((line, i) => {
+            const ly = y + L.fontSize * 0.4 + (i + 0.5) * L.lineHeight;
+            ctx.strokeText(line, tableX + tableWidth / 2, ly);
+            ctx.fillText(line, tableX + tableWidth / 2, ly);
         });
-        currentY += rowHeights[0];
+        y += L.titleHeight;
 
-        // Draw data rows
-        wrappedInputs.forEach((row, index) => {
-            const rowHeight = rowHeights[index + 1];
-            const maxLines = Math.max(row.label.length, row.value.length);
+        const labelX = tableX + tableWidth - cellPadding;
+        const valueX = labelX - L.col1Width - gap;
+        ctx.textAlign = 'right';
 
-            // Draw label (first column, right-aligned, starting from right edge)
-            ctx.textAlign = 'right';
-            row.label.forEach((line, i) => {
-                const y = currentY + (i + 0.5) * (rowHeight / maxLines);
-                ctx.strokeText(line, tableX + tableWidth - cellPadding - 25 , y);
-                ctx.fillText(line, tableX + tableWidth - cellPadding - 25 , y);
+        inputs.forEach((_, i) => {
+            const rowTop = y;
+            L.labelsWrapped[i].forEach((line, j) => {
+                const ly = rowTop + (j + 0.5) * L.lineHeight;
+                ctx.strokeText(line, labelX, ly);
+                ctx.fillText(line, labelX, ly);
             });
-
-            // Draw value (second column, right-aligned, to the left of first column)
-            row.value.forEach((line, i) => {
-                const y = currentY + (i + 0.5) * (rowHeight / maxLines);
-                ctx.strokeText(line,  tableWidth - col1Width - cellPadding, y);
-                ctx.fillText(line, tableWidth - col1Width - cellPadding, y);
+            L.valuesWrapped[i].forEach((line, j) => {
+                const ly = rowTop + (j + 0.5) * L.lineHeight;
+                ctx.strokeText(line, valueX, ly);
+                ctx.fillText(line, valueX, ly);
             });
-
-            currentY += rowHeight;
+            y += L.rowHeights[i];
         });
 
-        // Show canvas
         canvas.style.display = 'block';
 
-        // Create download link
-        const link = document.createElement('a');
-        link.download = 'text-on-image.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+        canvas.toBlob((blob) => {
+            if (!blob) { alert('خطا در ساخت تصویر'); return; }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'text-on-image.png';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }, 'image/png');
     }
 </script>
 </body>
